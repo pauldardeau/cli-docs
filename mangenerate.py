@@ -1,5 +1,10 @@
 # generate man page source from .ini file
 
+# helpful links:
+#   http://liw.fi/manpages/
+
+from datetime import datetime
+from time import time
 import sys
 
 
@@ -41,9 +46,11 @@ class ManPageGenerator:
 
 
     def generate_comments(self):
-        txt = '.\"\n'
-        #TODO: add comments about generation
-        txt += '.\"\n'
+        ts = time()
+        generated_ts = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+        txt = '.\" Generated at %s\n' % generated_ts
+        txt += '.\" mangenerate.py\n'
+        txt += '\n'
         return txt
 
 
@@ -88,10 +95,9 @@ class ManPageGenerator:
 
 
     def generate_description(self, section_text):
-        #TODO: implement generate_description
         txt = '\n'
-        txt += '.SH DESCRIPTION'
-        txt += '.PP'
+        txt += '.SH DESCRIPTION\n'
+        txt += '.PP\n'
         txt += section_text
         return txt
 
@@ -216,7 +222,17 @@ class ManPageGenerator:
                         if pos_start_end_tag > -1:
                             processed_output += output[pos_current:pos_indent_start]
                             processed_output += '.RS %d\n' % num_spaces
-                            processed_output += output[pos_close_tag+1:pos_start_end_tag]
+
+                            indented_text = output[pos_close_tag+1:pos_start_end_tag]
+                            indented_lines = indented_text.split('\n')
+
+                            for indented_line in indented_lines:
+                                if len(indented_line.strip()) > 0:
+                                    indented_line = '.IP "%s"\n' % indented_line
+                                else:
+                                    indented_line = '\n'
+                                processed_output += indented_line
+
                             processed_output += '.RE\n'
                             pos_current = pos_start_end_tag + \
                                           len(indent_end_tag)
@@ -237,19 +253,55 @@ class ManPageGenerator:
         return processed_output
 
 
+    def process_markup(self, output, start_tag, end_tag, start_escape, end_escape, markup_type):
+        processing = True
+        pos_current = 0
+        processed_output = ''
+        while processing:
+            pos_start = output.find(start_tag, pos_current)
+            if pos_start > -1:
+                pos_end = output.find(end_tag, pos_start + len(start_tag))
+                if pos_end > -1:
+                    processed_output += output[pos_current:pos_start]
+                    marked_text = output[pos_start+len(start_tag):pos_end]
+                    processed_output += '%s%s%s' % (start_escape, marked_text, end_escape)
+                    pos_current = pos_end + len(end_tag)
+                else:
+                    print("error: unterminated %s" % markup_type)
+                    sys.exit(1)
+            else:
+                processed_output += output[pos_current:]
+                processing = False
+
+        return processed_output
+
+
     def process_bold_markup(self, output):
-        #TODO: implement process_bold_markup
-        return output
+        return self.process_markup(output,
+                                   '<b>',
+                                   '</b>',
+                                   '\\fB',
+                                   '\\fR',
+                                   'bold')
 
 
     def process_underline_markup(self, output):
-        #TODO: implement process_underline_markup
-        return output
+        return self.process_markup(output,
+                                   '<u>',
+                                   '</u>',
+                                   '\\fI',
+                                   '\\fR',
+                                   'underline')
 
 
     def process_italic_markup(self, output):
-        #TODO: implement process_italic_markup
-        return output
+        # docs seem to indicate the italic is shown as underline
+        return self.process_markup(output,
+                                   '<i>',
+                                   '</i>',
+                                   '\\fI',
+                                   '\\fR',
+                                   'italic')
 
 
     def process_href_markup(self, output):
